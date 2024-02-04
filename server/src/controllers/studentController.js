@@ -14,8 +14,16 @@ async function getStudents(req, res) {
 
 async function addStudent(req, res) {
   const { name, nic, dob, contact_no, email, address } = req.body;
+
   try {
-    const student = await Student.create({
+    // Check if a student with the given email already exists
+    const existingStudent = await Student.findOne({ email: email });
+    if (existingStudent) {
+      return res.status(400).json({ error: "Student with this email already exists" });
+    }
+
+    // Create a new student
+    const newStudent = await Student.create({
       name,
       nic,
       dob,
@@ -23,7 +31,8 @@ async function addStudent(req, res) {
       email,
       address,
     });
-    res.status(200).json(student);
+
+    res.status(200).json(newStudent);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

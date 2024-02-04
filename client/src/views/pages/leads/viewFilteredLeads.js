@@ -3,7 +3,6 @@ import Grid from '@mui/material/Grid';
 import MainCard from 'ui-component/cards/MainCard';
 import { TextField, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { DataGrid } from '@mui/x-data-grid';
 import { GridToolbarContainer, GridToolbarExport } from '@mui/x-data-grid-premium';
 import FacebookIcon from '@mui/icons-material/Facebook';
 import TimelineIcon from '@mui/icons-material/Timeline';
@@ -23,6 +22,8 @@ import LeadDetailsPopup from '../../../ui-component/popups/LeadDetailsPopup';
 import { Tooltip } from '@mui/material';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
+import { alpha, styled } from '@mui/material/styles';
+import { DataGrid, gridClasses } from '@mui/x-data-grid';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import SettingsBackupRestoreIcon from '@mui/icons-material/SettingsBackupRestore';
 
@@ -33,6 +34,33 @@ function CustomToolbar() {
     </GridToolbarContainer>
   );
 }
+
+const ODD_OPACITY = 0.2;
+
+const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
+  [`& .${gridClasses.row}.even`]: {
+    backgroundColor: theme.palette.grey[200],
+    '&:hover, &.Mui-hovered': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY),
+      '@media (hover: none)': {
+        backgroundColor: 'transparent'
+      }
+    },
+    '&.Mui-selected': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity),
+      '&:hover, &.Mui-hovered': {
+        backgroundColor: alpha(
+          theme.palette.primary.main,
+          ODD_OPACITY + theme.palette.action.selectedOpacity + theme.palette.action.hoverOpacity
+        ),
+        // Reset on touch devices, it doesn't add specificity
+        '@media (hover: none)': {
+          backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity)
+        }
+      }
+    }
+  }
+}));
 
 export default function ViewLeads() {
   const { logout } = useLogout();
@@ -91,7 +119,7 @@ export default function ViewLeads() {
     {
       field: 'source',
       headerName: 'Source',
-      width: 150,
+      width: 70,
       renderCell: (params) => (
         <Tooltip title={params.row.source} arrow>
           {iconComponentMap[params.row.source]}
@@ -99,9 +127,9 @@ export default function ViewLeads() {
       )
     },
     { field: 'date', headerName: 'Date Added', width: 150 },
-    { field: 'name', headerName: 'Student Name', width: 200 },
-    { field: 'email', headerName: 'Email', width: 150 },
-    { field: 'contact_no', headerName: 'Contact No', width: 150 },
+    { field: 'name', headerName: 'Student Name', width: 150 },
+    { field: 'email', headerName: 'Email', width: 200 },
+    { field: 'contact_no', headerName: 'Contact No', width: 100 },
     { field: 'status', headerName: 'Status', width: 150 },
     {
       field: 'course',
@@ -113,7 +141,7 @@ export default function ViewLeads() {
       headerName: 'Assign To',
       description: 'This column has a value getter and is not sortable.',
       sortable: false,
-      width: 250,
+      width: 170,
       align: 'left',
       renderCell: (params) => {
         if (isAdminOrSupervisor) {
@@ -184,7 +212,7 @@ export default function ViewLeads() {
       headerName: '',
       description: 'This column has a value getter and is not sortable.',
       sortable: false,
-      width: 150,
+      width: 230,
       align: 'right',
       renderCell: (params) => (
         <>
@@ -194,9 +222,9 @@ export default function ViewLeads() {
             onClick={() => {
               updateLead(params.row.id);
             }}
-            sx={{borderRadius:'100px',padding:'10px'}}
+            sx={{ borderRadius: '100px', padding: '10px' }}
           >
-            <ModeIcon  />
+            <ModeIcon />
           </Button>
           <Button
             variant="contained"
@@ -205,35 +233,44 @@ export default function ViewLeads() {
               // Handle delete logic here
             }}
             style={{ marginLeft: '5px' }}
-            sx={{borderRadius:'100px',padding:'10px'}}
+            sx={{ borderRadius: '100px', padding: '10px' }}
           >
             <DeleteIcon />
           </Button>
-          {((params.row.status != 'Registered' )&&(params.row.status != 'Fake' )&&(params.row.status != 'Duplicate' )&&(params.row.status != 'Dropped' ))&&  <Button
-            variant="contained"
-            onClick={() => {
-              navigate('/app/leads/addfollowup?id=' + params.row.id);
-            }}
-            style={{ marginLeft: '5px' }}
-            sx={{borderRadius:'100px',padding:'10px',backgroundColor: "#039116",
-          }}
+          {params.row.status != 'Registered' &&
+            params.row.status != 'Fake' &&
+            params.row.status != 'Duplicate' &&
+            params.row.status != 'Dropped' && (
+              <Button
+                variant="contained"
+                color="success"
+                onClick={() => {
+                  navigate('/app/leads/addfollowup?id=' + params.row.id);
+                }}
+                style={{ marginLeft: '5px' }}
+                sx={{ borderRadius: '100px', padding: '10px', backgroundColor: '#039116' }}
+              >
+                <AddCircleOutlineIcon sx={{ color: 'white' }} />
+              </Button>
+            )}
 
-          >
-            <AddCircleOutlineIcon sx={{color:'white'}} />
-          </Button>}
-
-          {((params.row.status == 'Registered' )||(params.row.status == 'Fake' )||(params.row.status == 'Duplicate' )||(params.row.status == 'Dropped' ))&&  <Button
-            variant="contained"
-            onClick={() => {
-              navigate('/app/leads/addfollowup?id=' + params.row.id);
-            }}
-            style={{ marginLeft: '5px' }}
-            sx={{borderRadius:'100px',padding:'10px',backgroundColor: "#d1bd0a",
-          }}
-
-          >
-            <SettingsBackupRestoreIcon sx={{color:'white'}} />
-          </Button>}
+          {(params.row.status == 'Registered' ||
+            params.row.status == 'Fake' ||
+            params.row.status == 'Duplicate' ||
+            params.row.status == 'Dropped') && (
+            <Button
+              variant="contained"
+              color="success"
+              onClick={() => {
+                restorePrevious(params.row.id);
+                //navigate('/app/leads/addfollowup?id=' + params.row.id);
+              }}
+              style={{ marginLeft: '5px' }}
+              sx={{ borderRadius: '100px', padding: '10px', backgroundColor: '#d1bd0a' }}
+            >
+              <SettingsBackupRestoreIcon sx={{ color: 'white' }} />
+            </Button>
+          )}
         </>
       )
     }
@@ -245,7 +282,7 @@ export default function ViewLeads() {
   }
 
   useEffect(() => {
-    console.log(StatusUrl)
+    console.log(StatusUrl);
     async function fetchLeads() {
       try {
         const apiUrl = config.apiUrl + 'api/leads-details';
@@ -373,29 +410,30 @@ export default function ViewLeads() {
 
   return (
     <>
-      <MainCard title={StatusUrl + " leads"}>
+      <MainCard title={StatusUrl + ' leads'}>
         {loading && <LinearProgress />}
         <Grid container direction="column" justifyContent="center">
           <Grid container sx={{ p: 3 }} spacing={matchDownSM ? 0 : 2}>
             <Grid item xs={12} sm={12}>
-              <div style={{ height: 400, width: '100%' }}>
-                <DataGrid
+              <div style={{ height: 710, width: '100%' }}>
+                <StripedDataGrid
                   rows={data}
                   columns={columns}
+                  getRowClassName={(params) => (params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd')}
                   // handle row click should trigger for the row but except for the edit and delete buttons and assign to dropdown
                   onRowClick={(params, event) => {
-                    const isEditButtonClicked = event.target.closest('.MuiIconButton-root') !== null;
-                    const isDeleteButtonClicked = event.target.closest('.delete-button') !== null;
-                    const isAssignToDropdownClicked = event.target.closest('.MuiAutocomplete-root') !== null;
+                    const field = event.target.closest('.MuiDataGrid-cell').getAttribute('data-field');
 
-                    if (!isEditButtonClicked && !isDeleteButtonClicked && !isAssignToDropdownClicked) {
-                      // Only trigger handleRowClick when the row itself is clicked
+                    console.log(params);
+                    console.log(field);
+
+                    if (!(field == 'counsellor' || field == 'edit')) {
                       handleRowClick(params);
                     }
                   }}
                   initialState={{
                     pagination: {
-                      paginationModel: { page: 0, pageSize: 5 }
+                      paginationModel: { page: 0, pageSize: 10 }
                     }
                   }}
                   slots={{
@@ -405,7 +443,7 @@ export default function ViewLeads() {
                   getRowStyle={(params) => ({
                     backgroundColor: params.index % 2 === 0 ? '#fff' : '#f0f8ff'
                   })}
-                  pageSizeOptions={[5, 10]}
+                  pageSizeOptions={[10, 25, 100]}
                   checkboxSelection
                 />
               </div>

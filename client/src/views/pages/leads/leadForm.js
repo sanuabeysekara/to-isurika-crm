@@ -2,7 +2,7 @@ import * as React from 'react';
 import TextField from '@mui/material/TextField';
 import Grid from '@mui/material/Grid';
 import MainCard from 'ui-component/cards/MainCard';
-import { Alert, Button, CardActions, Divider, InputAdornment, Typography, responsiveFontSizes, useMediaQuery } from '@mui/material';
+import { Button, CardActions, Divider, InputAdornment, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import EmailIcon from '@mui/icons-material/Email';
@@ -32,7 +32,6 @@ export default function LeadForm() {
   const [branches, setBranches] = useState([]);
   const [courses, setCourses] = useState([]);
   const [statuses, setStatuses] = useState([]);
-  const [lable, setLable] = useState(false);
 
   const date = new Date();
   const formattedDate = date.toISOString().split('T')[0];
@@ -59,10 +58,10 @@ export default function LeadForm() {
   };
 
   // error showErrorSwal
-  const showErrorSwal = () => {
+  const showErrorSwal = (customErrorTitle) => {
     Toast.fire({
       icon: 'error',
-      title: 'Error Adding Lead.'
+      title: customErrorTitle || 'Error Adding Lead.'
     });
   };
 
@@ -142,7 +141,7 @@ export default function LeadForm() {
         const json = await response.json();
         setStatuses(json);
       } else {
-        if (responsiveFontSizes.status === 401) {
+        if (response.status === 401) {
           console.error('Unauthorized access. Logging out.');
           logout();
         } else if (response.status === 500) {
@@ -150,12 +149,11 @@ export default function LeadForm() {
           logout();
           return;
         } else {
-          console.error('Error fetching  status:', response.statusText);
+          console.error('Error fetching statuses:', response.statusText);
         }
-        return;
       }
     } catch (error) {
-      console.error('Error fetching status:', error.message);
+      console.error('Error fetching statuses:', error.message);
     }
   };
 
@@ -168,151 +166,170 @@ export default function LeadForm() {
 
   const handleSubmit = async (values, { setSubmitting, setFieldError }) => {
     console.log('Submitting form with values:', values);
+    let student_id = '';
 
-    //add lead code
     try {
-      //check duplicate lead
-      const chceckDuplicate = await fetch(
+      // Check duplicate lead
+      const checkDuplicate = await fetch(
         config.apiUrl + `api/checkLead?courseName=${values.course}&branchName=${values.branch}&studentNIC=${values.nic}`,
         {
           method: 'GET',
           headers: { Authorization: `Bearer ${user.token}` }
         }
       );
-      if (!chceckDuplicate.ok) {
-        if (chceckDuplicate.status === 401) {
+
+      if (!checkDuplicate.ok) {
+        console.error('Error checking duplicates', checkDuplicate.statusText);
+        return;
+      }
+
+      const duplicateLead = await checkDuplicate.json();
+
+      console.log('Check', duplicateLead.isDuplicate);
+
+      if (duplicateLead.isDuplicate) {
+        console.log('Lead already exists');
+        showErrorSwal("Lead with the same student's NIC, course and branch already exists.");
+        return;
+      }
+
+      // Check if student already exists by NIC or email
+      const checkStudent = await fetch(config.apiUrl + `api/students?nic=${values.nic}&email=${values.email}`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+
+      if (!checkStudent.ok) {
+        console.error('Error checking existing student', checkStudent.statusText);
+        return;
+      }
+
+      const existingStudents = await checkStudent.json();
+
+      // Filter the array to get only the matched student
+      const matchedStudent = existingStudents.find((student) => student.nic === values.nic);
+
+      if (matchedStudent) {
+        console.log('Matched Student:', matchedStudent);
+        const { isConfirmed } = await Swal.fire({
+          title: 'Student already exists',
+          text: `Student ${matchedStudent.name} already exists. Do you want to proceed with the existing student?`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Yes',
+          cancelButtonText: 'No'
+        });
+
+        if (!isConfirmed) {
+          console.log('User chose not to add lead to existing student');
+          return;
+        }
+      } else {
+        // Create new student
+        const formData = {
+          name: values.name,
+          dob: values.dob,
+          contact_no: values.contact_no,
+          email: values.email,
+          address: values.address,
+          nic: values.nic
+        };
+
+        const studentResponse = await fetch(config.apiUrl + 'api/students', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${user.token}`
+          },
+          body: JSON.stringify(formData)
+        });
+
+        if (!studentResponse.ok) {
+          showErrorSwal(studentResponse.statusText);
+          console.error('Error inserting data to the student table', studentResponse.statusText);
+          return;
+        }
+
+        const studentData = await studentResponse.json();
+        student_id = studentData._id;
+        console.log('New Student ID:', student_id);
+      }
+
+      // Insert lead data
+      const leadResponse = await fetch(config.apiUrl + 'api/leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user.token}`
+        },
+        body: JSON.stringify({
+          date: values.date,
+          scheduled_to: values.scheduled_to,
+          course_name: values.course,
+          branch_name: values.branch,
+          student_id: student_id,
+          user_id: user?._id
+        })
+      });
+
+      if (!leadResponse.ok) {
+        console.error('Error inserting data to the lead table', leadResponse.statusText);
+        return;
+      }
+
+      const leadData = await leadResponse.json();
+      const { _id: lead_id } = leadData;
+      console.log('Lead ID:', lead_id);
+      //insert followup
+
+      // find the status with name "New" and get its id
+      const newStatusObject = statuses.find((status) => status.name === 'New');
+      const newStatus = newStatusObject ? newStatusObject._id : null;
+
+      if (newStatus) {
+        // Proceed with using newStatus as needed
+        console.log('New Status ID:', newStatus);
+      } else {
+        console.error('Status with name "New" not found or missing _id.');
+      }
+
+      const followUpResponse = await fetch(config.apiUrl + 'api/followUps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify({
+          lead_id: lead_id,
+          user_id: user?._id,
+          status: newStatus
+        })
+      });
+      if (!followUpResponse.ok) {
+        if (followUpResponse.status === 401) {
           console.error('Unauthorized access. Logging out.');
           logout();
-        }
-        if (chceckDuplicate.status === 500) {
+        } else if (followUpResponse.status === 500) {
           console.error('Internal Server Error.');
           logout();
           return;
         } else {
-          console.error('Error checking duplicates', studentResponse.statusText);
+          console.error('Error inserting followup data', followUpResponse.statusText);
         }
         return;
       }
 
-      const duplicateLead = await chceckDuplicate.json();
-      setLable(duplicateLead.isDuplicate);
+      console.log('Data inserted successfully!');
+      showSuccessSwal();
 
-      console.log('check', duplicateLead.isDuplicate);
-
-      const formData = {
-        name: values.name,
-        dob: values.dob,
-        contact_no: values.contact_no,
-        email: values.email,
-        address: values.address,
-        nic: values.nic
-      };
-
-      if (duplicateLead.isDuplicate == false) {
-        //insert student data
-        const studentResponse = await fetch(config.apiUrl + 'api/students', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
-          body: JSON.stringify(formData)
-        });
-        if (!studentResponse.ok) {
-          if (studentResponse.status === 401) {
-            console.error('Unauthorized access. Logging out.');
-            logout();
-          } else if (studentResponse.status === 500) {
-            console.error('Internal Server Error.');
-            logout();
-            return;
-          } else {
-            console.error('Error inserting data to the student table', studentResponse.statusText);
-          }
-          return;
-        }
-        const studentData = await studentResponse.json();
-        const { _id: student_id } = studentData;
-        console.log('Student ID:', student_id);
-
-        //insert lead data
-        const leadResponse = await fetch(config.apiUrl + 'api/leads', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
-          body: JSON.stringify({
-            date: values.date,
-            sheduled_to: values.scheduled_to,
-            course_name: values.course,
-            branch_name: values.branch,
-            student_id: student_id,
-            user_id: user?._id
-          })
-        });
-        if (!leadResponse.ok) {
-          if (leadResponse.status === 401) {
-            console.error('Unauthorized access. Logging out.');
-            logout();
-          } else if (leadResponse.status === 500) {
-            console.error('Internal Server Error.');
-            logout();
-            return;
-          } else {
-            console.error('Error inserting data to the lead table', leadResponse.statusText);
-          }
-          return;
-        }
-        const LeadData = await leadResponse.json();
-        const { _id: lead_id } = LeadData;
-        console.log('Lead ID:', lead_id);
-        //insert followup
-
-        // find the status with name "New" and get its id
-        const newStatusObject = statuses.find((status) => status.name === 'New');
-        const newStatus = newStatusObject ? newStatusObject._id : null;
-
-        if (newStatus) {
-          // Proceed with using newStatus as needed
-          console.log('New Status ID:', newStatus);
-        } else {
-          console.error('Status with name "New" not found or missing _id.');
-        }
-
-        const followUpResponse = await fetch(config.apiUrl + 'api/followUps', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
-          body: JSON.stringify({
-            lead_id: lead_id,
-            user_id: user?._id,
-            status: newStatus
-          })
-        });
-        if (!followUpResponse.ok) {
-          if (followUpResponse.status === 401) {
-            console.error('Unauthorized access. Logging out.');
-            logout();
-          } else if (followUpResponse.status === 500) {
-            console.error('Internal Server Error.');
-            logout();
-            return;
-          } else {
-            console.error('Error inserting followup data', followUpResponse.statusText);
-          }
-          return;
-        }
-        console.log('Data inserted successfully!');
-        showSuccessSwal();
-
-        setLeadData({
-          name: '',
-          dob: '',
-          email: '',
-          contact_no: '',
-          address: '',
-          date: formattedDate,
-          scheduled_to: '',
-          course: 'Computer Science',
-          branch: 'Colombo'
-        });
-      } else {
-        console.log('Duplicate Lead');
-      }
+      setLeadData({
+        name: '',
+        dob: '',
+        email: '',
+        contact_no: '',
+        address: '',
+        date: formattedDate,
+        scheduled_to: '',
+        course: 'Computer Science',
+        branch: 'Colombo'
+      });
     } catch (error) {
       console.error('Error during data insertion:', error.message);
       showErrorSwal();
@@ -638,10 +655,6 @@ export default function LeadForm() {
                         </option>
                       )}
                     </TextField>
-                  </Grid>
-
-                  <Grid item xs={12} sm={12}>
-                    {lable == true ? <Alert severity="error">Already added this lead.</Alert> : <></>}
                   </Grid>
                 </Grid>
                 <Divider sx={{ mt: 3, mb: 2 }} />
