@@ -71,7 +71,7 @@ const EarningCard = ({ isLoading, data }) => {
       {isLoading ? (
         <SkeletonEarningCard />
       ) : (
-        <CardWrapper border={false} content={false}>
+        <CardWrapper onClick={handleClick} border={false} content={false}>
           <Box sx={{ p: 2.25 }}>
             <Grid container direction="column">
               <Grid item>
