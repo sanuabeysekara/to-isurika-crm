@@ -255,6 +255,10 @@ export default function LeadForm() {
         console.log('New Student ID:', student_id);
       }
 
+      if (matchedStudent) {
+        student_id = matchedStudent._id;
+      }
+
       // Insert lead data
       const leadResponse = await fetch(config.apiUrl + 'api/leads', {
         method: 'POST',
